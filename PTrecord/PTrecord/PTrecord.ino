@@ -34,7 +34,7 @@ bool createNewLogFile() {
       logFile = SD.open(fname.c_str(), FILE_WRITE);
       if (logFile) {
         // CSV header
-        logFile.println(F("ms_since_boot,temp_C,temp_F"));
+        logFile.println(F("ms_since_boot,temp_C"));
         logFile.flush();
         Serial.print(F("Logging to: "));
         Serial.println(fname);
@@ -104,23 +104,20 @@ void loop() {
 
     // Read temperature (°C) from MPL3115A2
     float tempC = mpl.getTemperature();  // Adafruit lib returns Celsius
-    float tempF = tempC * 9.0f / 5.0f + 32.0f;
+
 
     // Print to serial
     Serial.print(now);
     Serial.print(F(", "));
     Serial.print(tempC, 2);
     Serial.print(F(" C, "));
-    Serial.print(tempF, 2);
-    Serial.println(F(" F"));
+
 
     // Write to SD
     if (logFile) {
       logFile.print(now);
       logFile.print(',');
       logFile.print(tempC, 2);
-      logFile.print(',');
-      logFile.println(tempF, 2);
       logFile.flush(); // ensure data hits the card
     } else {
       // Try to recover by reopening (append to last file if possible)
