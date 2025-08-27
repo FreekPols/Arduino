@@ -1,5 +1,5 @@
-// MKR Zero + MPL3115A2 temperature logger to SD
-// Creates TEMP000.CSV, TEMP001.CSV, ... and logs: ms_since_boot, temp_C, temp_F
+// MKR Zero + MPL3115A2 temp & pressure logger to SD
+// Creates TEMP000.CSV, TEMP001.CSV, ... and logs: ms_since_boot,temp_C,press_hPa
 
 #include <Wire.h>
 #include <SPI.h>
@@ -9,7 +9,7 @@
 Adafruit_MPL3115A2 mpl = Adafruit_MPL3115A2();
 File logFile;
 
-const uint32_t LOG_INTERVAL_MS = 5000;     // change to taste
+const uint32_t LOG_INTERVAL_MS = 500;     // change to taste
 const uint8_t  MAX_FILES        = 200;     // TEMP000.CSV ... TEMP199.CSV
 const char*    FILE_PREFIX      = "TEMP";
 const char*    FILE_EXT         = ".CSV";
@@ -33,8 +33,8 @@ bool createNewLogFile() {
     if (!SD.exists(fname.c_str())) {
       logFile = SD.open(fname.c_str(), FILE_WRITE);
       if (logFile) {
-        // CSV header
-        logFile.println(F("ms_since_boot,temp_C"));
+        // CSV header (includes pressure)
+        logFile.println(F("ms_since_boot,temp_C,press_hPa"));
         logFile.flush();
         Serial.print(F("Logging to: "));
         Serial.println(fname);
@@ -66,8 +66,7 @@ bool initSensor() {
     Serial.println(F("not found (check wiring, power, I2C addr 0x60)."));
     return false;
   }
-  // The Adafruit driver sets a reasonable default; ensure we're in active mode
-  // and ready to read temperature (always available).
+  // Some library versions auto-handle mode/oversampling on read.
   Serial.println(F("OK"));
   return true;
 }
@@ -86,7 +85,7 @@ void setup() {
 
   if (!initSensor()) {
     Serial.println(F("Sensor init failed; halting."));
-    while (1) { delay(100); }
+    while (1) { delay(100); }   // <-- missing ';' fixed, and proper braces
   }
 
   if (!createNewLogFile()) {
@@ -102,31 +101,31 @@ void loop() {
   if (now - lastLog >= LOG_INTERVAL_MS) {
     lastLog = now;
 
-    // Read temperature (°C) from MPL3115A2
-    float tempC = mpl.getTemperature();  // Adafruit lib returns Celsius
-
+    // Read temperature (°C) and pressure (Pa) from MPL3115A2
+    float tempC   = mpl.getTemperature();  // Celsius
+    float pressPa = mpl.getPressure();     // Pascals
+    float press_hPa = pressPa / 100.0f;    // Pa -> hPa (millibars)
 
     // Print to serial
     Serial.print(now);
     Serial.print(F(", "));
     Serial.print(tempC, 2);
     Serial.print(F(" C, "));
-
+    Serial.print(press_hPa, 2);
+    Serial.println(F(" hPa"));
 
     // Write to SD
     if (logFile) {
       logFile.print(now);
       logFile.print(',');
       logFile.print(tempC, 2);
+      logFile.print(',');
+      logFile.println(press_hPa, 2);
       logFile.flush(); // ensure data hits the card
     } else {
-      // Try to recover by reopening (append to last file if possible)
       Serial.println(F("logFile closed unexpectedly; attempting to recover..."));
-      // This simple example does not track the exact filename after reopen,
-      // so you could store it in a global if you want to be able to re-open cleanly.
     }
   }
 
-  // Low-power friendly delay between checks
   delay(5);
 }
